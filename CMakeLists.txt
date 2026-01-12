@@ -24,6 +24,23 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# Modifications Copyright (c) 2024 Advanced Micro Devices, Inc.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
 cmake_minimum_required(VERSION 3.31.8)
 
 project(tritoncore LANGUAGES C CXX)
@@ -162,8 +179,9 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
   option(TRITON_ENABLE_STATS "Include statistics collections in server" ON)
   option(TRITON_ENABLE_TRACING "Include tracing support in server" OFF)
   option(TRITON_ENABLE_NVTX "Include NVTX support in server" OFF)
-  option(TRITON_ENABLE_GPU "Enable GPU support in server" ON)
+  option(TRITON_ENABLE_GPU "Enable GPU support in server" OFF)
   option(TRITON_ENABLE_MALI_GPU "Enable Arm Mali GPU support in server" OFF)
+  option(TRITON_ENABLE_ROCM "Enable AMD GPU support in server" ON)
   set(TRITON_MIN_COMPUTE_CAPABILITY "7.5" CACHE STRING
       "The minimum CUDA compute capability supported by Triton" )
   set(TRITON_EXTRA_LIB_PATHS "" CACHE PATH "Extra library paths for Triton Server build")
@@ -343,6 +361,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -DTRITON_ENABLE_STATS:BOOL=${TRITON_ENABLE_STATS}
       -DTRITON_ENABLE_GPU:BOOL=${TRITON_ENABLE_GPU}
       -DTRITON_ENABLE_MALI_GPU:BOOL=${TRITON_ENABLE_MALI_GPU}
+      -DTRITON_ENABLE_ROCM:BOOL=${TRITON_ENABLE_ROCM}
       -DTRITON_MIN_COMPUTE_CAPABILITY:STRING=${TRITON_MIN_COMPUTE_CAPABILITY}
       -DTRITON_ENABLE_METRICS:BOOL=${TRITON_ENABLE_METRICS}
       -DTRITON_ENABLE_METRICS_GPU:BOOL=${TRITON_ENABLE_METRICS_GPU}

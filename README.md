@@ -1,3 +1,61 @@
+# Triton Inference Server Core - ROCm Edition
+
+This fork adds AMD GPU support to Triton Inference Server Core using ROCm.
+
+Typically you do not build or use the core library on its own, but as
+part of the *tritonserver* executable. The *tritonserver* executable
+is built in the [server
+repo](https://github.com/ROCm/tis-server) as described
+in the [server build
+documentation](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/build.md).
+
+## Build with ROCm Support (AMD GPU)
+
+### Prerequisites
+
+* ROCm software stack installed (typically at `/opt/rocm`)
+* Python 3 (for the hipify conversion tool)
+* CMake 3.31.8 or higher
+
+### Build Instructions
+
+To build the Triton core library with ROCm support:
+
+```
+$ mkdir build
+$ cd build
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install \
+        -DTRITON_CORE_HEADERS_ONLY=OFF \
+        -DTRITON_ENABLE_ROCM=ON \
+        -DTRITON_ENABLE_GPU=OFF \
+        -DTRITON_HIPIFY_PERL=/opt/rocm/bin/hipify-perl \
+        ..
+$ make VERBOSE=1 install -j$(nproc)
+```
+
+### ROCm Build Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `TRITON_ENABLE_ROCM` | Enable AMD GPU support using ROCm | ON |
+| `TRITON_ENABLE_GPU` | Enable NVIDIA GPU support using CUDA | OFF |
+| `TRITON_HIPIFY_PERL` | Path to the hipify-perl tool | `/opt/rocm/bin/hipify-perl` |
+
+> **Note:** `TRITON_ENABLE_GPU` is for CUDA (NVIDIA) builds, while `TRITON_ENABLE_ROCM` is for ROCm (AMD) builds. These options are mutually exclusive.
+
+### Hipify Process
+
+The build system includes a hipify module (`cmake/triton_rocm_hipify.cmake`)
+that automatically converts CUDA source files (`.cu`, `.cuh`, `.cc`, `.h`) to
+HIP-compatible source files for the ROCm platform. The conversion is performed
+using the `amd_hipify.py` script which wraps the hipify-perl tool.
+
+When the build completes, the install directory will contain the
+Triton core shared library (`install/lib/libtritonserver.so`), and the
+core library header files in `install/include/triton/core`.
+
+---
+
 <!--
 # Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #

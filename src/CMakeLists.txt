@@ -58,6 +58,48 @@ if(${TRITON_ENABLE_GPU})
 endif() # TRITON_ENABLE_GPU
 
 #
+# ROCm/HIP - Build-time hipification
+#
+if(${TRITON_ENABLE_ROCM})
+  find_package(hip REQUIRED)
+  find_package(HIP)
+  enable_language(HIP)
+  
+  # Locate hipify-perl
+  if(NOT TRITON_HIPIFY_PERL)
+    find_path(HIPIFY_PERL_PATH
+      NAMES hipify-perl
+      HINTS
+      $ENV{ROCM_PATH}/bin
+      /opt/rocm/bin
+      /opt/rocm/hip/bin
+    )
+    if(HIPIFY_PERL_PATH-NOTFOUND)
+      message(FATAL_ERROR "hipify-perl not found. Set TRITON_HIPIFY_PERL or ensure ROCm is installed.")
+    endif()
+    set(TRITON_HIPIFY_PERL ${HIPIFY_PERL_PATH}/hipify-perl)
+  endif()
+  message(STATUS "Using hipify-perl: ${TRITON_HIPIFY_PERL}")
+  
+  # Include hipify cmake module and run hipification
+  set(REPO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
+  include(${REPO_ROOT}/cmake/triton_rocm_hipify.cmake)
+  
+  # Exclude test, ensemble_scheduler, and stub files from hipification
+  # tritonserver_stub.cc is for a separate library (triton-core-serverstub), not the main library
+  set(HIPIFY_EXCLUDE_PATTERNS "test/*" "ensemble_scheduler/*" "tritonserver_stub.cc")
+  hipify("src" HIPIFY_EXCLUDE_PATTERNS triton_hipified_cc_srcs triton_hipified_cu_srcs)
+  
+  add_custom_target(generated_hipified_files DEPENDS
+    ${triton_hipified_cc_srcs}
+    ${triton_hipified_cu_srcs}
+  )
+  
+  auto_set_source_files_hip_language(${triton_hipified_cu_srcs})
+  message(STATUS "Hipified source files will be generated at build time")
+endif() # TRITON_ENABLE_ROCM
+
+#
 # Boost
 #
 # Minimum of 1.78 required for use of boost::span. This can eventually be
@@ -203,6 +245,8 @@ set(
   tritonserver_apis.h
 )
 
+# CUDA-specific files - only for NVIDIA GPU builds (not ROCm)
+# ROCm builds use hipified versions of these files instead
 if(${TRITON_ENABLE_GPU})
   set(
     SERVER_SRCS
@@ -233,10 +277,20 @@ if(${TRITON_ENABLE_ENSEMBLE})
   )
 endif() # TRITON_ENABLE_ENSEMBLE
 
+# For ROCm builds, use ONLY hipified sources (they replace all original sources)
+# For non-ROCm builds, use original sources
+if(${TRITON_ENABLE_ROCM})
+  add_library(
+    triton-core SHARED
+    ${triton_hipified_cc_srcs}
+    ${triton_hipified_cu_srcs}
+  )
+else()
 add_library(
   triton-core SHARED
   ${SERVER_SRCS} ${SERVER_HDRS}
 )
+endif() # TRITON_ENABLE_ROCM
 
 add_library(
   TritonCore::triton-core ALIAS triton-core
@@ -253,10 +307,17 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
       /W1 /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
   )
 else()
+  set(TRITON_COMPILE_OPTIONS
+    -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -Wno-error=maybe-uninitialized -Werror
+  )
+  # ROCm/HIP specific: suppress nodiscard warnings from HIP API and pointer arithmetic on void*
+  if(${TRITON_ENABLE_ROCM})
+    list(APPEND TRITON_COMPILE_OPTIONS -Wno-unused-result -Wno-pointer-arith)
+  endif()
   target_compile_options(
     triton-core
     PRIVATE
-      -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -Wno-error=maybe-uninitialized -Werror
+      ${TRITON_COMPILE_OPTIONS}
   )
   set_target_properties(
     triton-core
@@ -277,6 +338,20 @@ set_target_properties(
     INSTALL_RPATH "$\{ORIGIN\}:$\{ORIGIN\}/pytorch"
 )
 
+# For ROCm builds, hipified directories must come FIRST so hipified headers are found
+# instead of original headers
+if(${TRITON_ENABLE_ROCM})
+  target_include_directories(
+    triton-core
+    PRIVATE
+      ${CMAKE_CURRENT_BINARY_DIR}/amdgpu/src
+      ${CMAKE_CURRENT_BINARY_DIR}/amdgpu
+      ${CMAKE_CURRENT_SOURCE_DIR}/../include
+      ${CMAKE_CURRENT_SOURCE_DIR}  # For non-hipified files (ensemble_scheduler, etc.)
+      ${Boost_INCLUDE_DIRS}
+      ${Protobuf_INCLUDE_DIRS}
+  )
+else()
 target_include_directories(
   triton-core
   PRIVATE
@@ -285,6 +360,7 @@ target_include_directories(
     ${Boost_INCLUDE_DIRS}
     ${Protobuf_INCLUDE_DIRS}
 )
+endif()
 
 if(${TRITON_ENABLE_GPU})
   target_include_directories(
@@ -387,6 +463,14 @@ if(${TRITON_ENABLE_MALI_GPU})
   )
 endif() # TRITON_ENABLE_MALI_GPU
 
+if(${TRITON_ENABLE_ROCM})
+  target_compile_definitions(
+    triton-core
+    PRIVATE TRITON_ENABLE_ROCM=1
+    PRIVATE TRITON_MIN_COMPUTE_CAPABILITY=${TRITON_MIN_COMPUTE_CAPABILITY}
+  )
+endif() # TRITON_ENABLE_ROCM
+
 if(${TRITON_ENABLE_METRICS})
   target_compile_definitions(
     triton-core
@@ -447,6 +531,17 @@ ENDFOREACH(p)
 # list of targets
 find_package(Threads)
 find_package(re2 REQUIRED)
+
+if(${TRITON_ENABLE_ROCM})
+  # HIP packages already found earlier during hipification setup
+  target_link_libraries(
+    triton-core
+    PUBLIC
+      hip::host
+  )
+  # Ensure hipified files are generated before building triton-core
+  add_dependencies(triton-core generated_hipified_files)
+endif() # TRITON_ENABLE_ROCM
 
 target_link_libraries(
   triton-core
