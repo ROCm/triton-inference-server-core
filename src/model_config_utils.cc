@@ -1988,14 +1988,10 @@ ValidateModelConfigInt64()
     LOG_VERBOSE(1) << "\t" << f;
   }
 
+#ifndef TRITON_ENABLE_ROCM
   // We expect to find exactly the following fields. If we get an
   // error from this code ModelConfig has added or removed a 64-bit
   // field and we need to adjust here and in ModelConfigToJson below.
-#ifdef TRITON_ENABLE_ROCM
-  const char* opt_prefix = "ModelConfig::optimization::rocm::graph_spec";
-#else
-  const char* opt_prefix = "ModelConfig::optimization::cuda::graph_spec";
-#endif
   std::set<std::string> expected{
       "ModelConfig::input::dims",
       "ModelConfig::input::reshape::shape",
@@ -2017,14 +2013,16 @@ ValidateModelConfigInt64()
       "ModelConfig::sequence_batching::max_sequence_idle_microseconds",
       "ModelConfig::ensemble_scheduling::step::model_version",
       "ModelConfig::model_warmup::inputs::value::dims",
-      std::string(opt_prefix) + "::input::value::dim",
-      std::string(opt_prefix) + "::graph_lower_bound::input::value::dim",
+      "ModelConfig::optimization::cuda::graph_spec::input::value::dim",
+      "ModelConfig::optimization::cuda::graph_spec::graph_lower_bound::input::"
+      "value::dim",
       "ModelConfig::instance_group::secondary_devices::device_id"};
 
   if (int64_fields != expected) {
     return Status(
         Status::Code::INTERNAL, "ModelConfig 64-bit field needs update");
   }
+#endif  // !TRITON_ENABLE_ROCM
 
   return Status::Success;
 }
